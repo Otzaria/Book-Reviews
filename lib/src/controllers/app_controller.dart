@@ -54,16 +54,18 @@ class AppController extends ChangeNotifier {
   int get libraryBookCount => _index.byTitle.length;
 
   /// מה חסר כדי לבנות (null = אפשר לבנות).
+  /// מזהה המסד של הקלט הנוכחי (ראו [libraryIdForInputs]).
+  String get libraryId => libraryIdForInputs(settings.inputs.map((i) => i.path));
+
   String? get buildBlocker {
     if (!items.any((i) => i.role == InputRole.book || i.role == InputRole.notes)) return 'הוסיפו לפחות קובץ ספר אחד (TXT)';
-    if (settings.outPath.isEmpty) return 'בחרו היכן לשמור את המסד';
+    if (settings.outDir.isEmpty) return 'בחרו היכן לשמור את המסד';
     if (settings.displayName.trim().isEmpty) return 'תנו שם לספרייה';
     return null;
   }
 
   Future<void> init() async {
     settings = await SettingsStore.load();
-    if (settings.libraryId.isEmpty) settings.libraryId = newLibraryId();
     loaded = true;
     _refreshItems();
     notifyListeners();
@@ -229,11 +231,6 @@ class AppController extends ChangeNotifier {
     _changed();
   }
 
-  void setOutName(String name) {
-    settings.outName = name;
-    _changed();
-  }
-
   void setDisplayName(String v) {
     settings.displayName = v;
     _changed();
@@ -271,11 +268,6 @@ class AppController extends ChangeNotifier {
     _changed();
   }
 
-  void regenerateLibraryId() {
-    settings.libraryId = newLibraryId();
-    _changed();
-  }
-
   // ─── בנייה ────────────────────────────────────────────────────────
 
   void cancelActivity() {
@@ -295,7 +287,7 @@ class AppController extends ChangeNotifier {
       inputs: List.of(s.inputs),
       libraryPath: s.libraryPath,
       outPath: s.outPath,
-      libraryId: s.libraryId,
+      libraryId: libraryId,
       displayName: s.displayName.trim(),
       author: s.author.trim(),
       defaultCategory: s.defaultCategory,

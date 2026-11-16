@@ -156,6 +156,8 @@ BuildResult buildDatabase(BuildOptions o, {ProgressFn? progress, void Function()
 
   if (o.inputs.isEmpty) throw BuildError('לא נוספו קבצים.');
   if (o.outPath.isEmpty) throw BuildError('לא נבחר קובץ פלט.');
+  final target = planOutput(o.outPath, o.displayName, o.libraryId);
+  if (target.replaces) ensureReplaceable(target.path);
 
   say('קורא את otzaria-library', o.libraryPath);
   final index = LibraryIndex.scan(o.libraryPath);
@@ -858,11 +860,8 @@ BuildResult buildDatabase(BuildOptions o, {ProgressFn? progress, void Function()
 
   // ── כתיבת המסד ──
   say('כותב את המסד');
-  final prev = readSchemaMeta(o.outPath);
-  final version = prev != null && prev['library_id'] == o.libraryId
-      ? (int.tryParse(prev['db_version'] ?? '') ?? 0) + 1
-      : 1;
-  final tmp = '${o.outPath}.part';
+  final version = target.version;
+  final tmp = '${target.path}.part';
   for (final f in [tmp, '$tmp-journal', '$tmp-wal', '$tmp-shm']) {
     if (File(f).existsSync()) File(f).deleteSync();
   }
@@ -886,8 +885,8 @@ BuildResult buildDatabase(BuildOptions o, {ProgressFn? progress, void Function()
 
     ins.run('INSERT INTO schema_meta(key,value) VALUES (?,?)', [
       ['library_id', o.libraryId],
-      ['library_name', o.displayName],
-      ['display_name', o.displayName],
+      ['library_name', target.name],
+      ['display_name', target.name],
       ['db_version', '$version'],
       ['db_schema_version', '7'],
       ['description', 'ספרים לבדיקה, נבנו לפי כללי המחולל הרשמי (בודק המרות לאוצריא)'],
@@ -1145,9 +1144,16 @@ BuildResult buildDatabase(BuildOptions o, {ProgressFn? progress, void Function()
     db.close();
     db = null;
     if (ok != 'ok') throw BuildError('בדיקת תקינות המסד נכשלה: $ok');
-    final out = File(o.outPath);
-    if (out.existsSync()) out.deleteSync();
-    File(tmp).renameSync(o.outPath);
+    final out = File(target.path);
+    try {
+      if (out.existsSync()) out.deleteSync();
+    } on FileSystemException {
+      throw BuildError(
+        'לא ניתן להחליף את ${p.basename(target.path)}: הוא נעול (פתוח באוצריא). '
+        'באוצריא: "שחרר קובץ" בכרטיס המסד, ואז הריצו שוב.',
+      );
+    }
+    File(tmp).renameSync(target.path);
   } finally {
     db?.close();
     final t = File(tmp);
@@ -1183,7 +1189,7 @@ BuildResult buildDatabase(BuildOptions o, {ProgressFn? progress, void Function()
     ];
   }
   return BuildResult(
-    outPath: o.outPath,
+    outPath: target.path,
     version: version,
     books: orderedBooks.length,
     lines: orderedBooks.fold(0, (s, b) => s + b.lines.length),
@@ -1191,7 +1197,7 @@ BuildResult buildDatabase(BuildOptions o, {ProgressFn? progress, void Function()
     links: links.length,
     externalLinks: externals.length,
     lineNotes: orderedBooks.fold(0, (s, b) => s + b.report.lineNotes),
-    sizeBytes: File(o.outPath).lengthSync(),
+    sizeBytes: File(target.path).lengthSync(),
     elapsedMs: clock.elapsedMilliseconds,
     bookReports: [for (final b in orderedBooks) b.report, ...skippedReports],
     linkFiles: linkReports,
@@ -1390,6 +1396,69 @@ class _AltStructure {
 
 // ───────────────────────── עזרים ─────────────────────────
 
+/// היעד של בנייה.
+class OutputPlan {
+  const OutputPlan(this.path, this.name, this.version, this.replaces);
+  final String path;
+
+  /// שם התצוגה באוצריא (`schema_meta.display_name`).
+  final String name;
+  final int version;
+
+  /// true: אותם קבצי קלט כמו מסד קיים בתיקייה, ולכן הוא יוחלף (אותו שם וגרסה גבוהה יותר).
+  final bool replaces;
+}
+
+/// בוחר את הקובץ והשם:
+/// - אותם קבצי קלט ([libraryId] זהה) כמו מסד שכבר בתיקייה ← אותו קובץ ואותו שם תצוגה, גרסה אחת מעליו.
+/// - קבצי קלט אחרים ← שם חדש: [baseName], ואם הוא תפוס `שם (1)`, `שם (2)`… גם בקובץ וגם בשם התצוגה.
+OutputPlan planOutput(String basePath, String baseName, String libraryId) {
+  final dirPath = p.dirname(basePath);
+  final dir = Directory(dirPath);
+  final stem = p.basenameWithoutExtension(basePath);
+  final ext = p.extension(basePath);
+  final numbered = RegExp('^${RegExp.escape(stem)} \\(\\d+\\)\$');
+  final taken = <String>{};
+  if (dir.existsSync()) {
+    for (final f in dir.listSync().whereType<File>()) {
+      final base = p.basename(f.path);
+      if (!base.toLowerCase().endsWith(ext.toLowerCase())) continue;
+      final fileStem = base.substring(0, base.length - ext.length);
+      if (fileStem != stem && !numbered.hasMatch(fileStem)) continue;
+      taken.add(fileStem.toLowerCase());
+      final meta = readSchemaMeta(f.path);
+      if (meta != null && meta['library_id'] == libraryId) {
+        final name = (meta['display_name'] ?? '').isNotEmpty ? meta['display_name']! : fileStem;
+        return OutputPlan(f.path, name, (int.tryParse(meta['db_version'] ?? '') ?? 0) + 1, true);
+      }
+    }
+  }
+  var n = 0;
+  while (true) {
+    final suffix = n == 0 ? '' : ' ($n)';
+    if (!taken.contains('$stem$suffix'.toLowerCase())) {
+      return OutputPlan(p.join(dirPath, '$stem$suffix$ext'), '$baseName$suffix', 1, false);
+    }
+    n++;
+  }
+}
+
+/// זורק [BuildError] אם הקובץ [path] נעול (למשל פתוח באוצריא), לפני שמתחילים לבנות.
+void ensureReplaceable(String path) {
+  final f = File(path);
+  if (!f.existsSync()) return;
+  final probe = '$path.lockcheck';
+  try {
+    f.renameSync(probe);
+    File(probe).renameSync(path);
+  } on FileSystemException {
+    if (File(probe).existsSync() && !f.existsSync()) File(probe).renameSync(path);
+    throw BuildError(
+      'הקובץ ${p.basename(path)} נעול (פתוח באוצריא). באוצריא: הגדרות ← ספרייה ← מסדי ספרים אישיים ← "שחרר קובץ", ואז הריצו שוב.',
+    );
+  }
+}
+
 /// schema_meta של מסד קיים, או null.
 Map<String, String>? readSchemaMeta(String path) {
   if (!File(path).existsSync()) return null;
@@ -1404,8 +1473,18 @@ Map<String, String>? readSchemaMeta(String path) {
   }
 }
 
-/// מזהה ספרייה חדש: `chk-<base36>`.
-String newLibraryId() => 'chk-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
+/// מזהה המסד נגזר מקבוצת הקבצים שבקלט: אותם קבצים ← אותו מזהה (אוצריא מקבלת גרסה חדשה של אותו מסד),
+/// קבצים אחרים ← מזהה אחר (אוצריא מקבלת מסד נפרד). `chk-<hash>`.
+String libraryIdForInputs(Iterable<String> paths) {
+  final keys = {for (final x in paths) p.normalize(x).replaceAll('\\', '/').toLowerCase()}.toList()..sort();
+  var h1 = 0xcbf29ce484222325;
+  var h2 = 0x84222325cbf29ce4;
+  for (final unit in utf8.encode(keys.join('\n'))) {
+    h1 = ((h1 ^ unit) * 0x100000001b3) & 0x7fffffffffffffff;
+    h2 = ((h2 ^ unit) * 0x1000193) & 0x7fffffffffffffff;
+  }
+  return 'chk-${h1.toRadixString(36)}${h2.toRadixString(36)}'.substring(0, 24);
+}
 
 String formatBytes(int b) {
   if (b < 1024) return '$b בתים';

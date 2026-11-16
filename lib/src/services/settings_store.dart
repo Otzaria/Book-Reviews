@@ -13,10 +13,8 @@ class Settings {
   String libraryPath = p.join(_home(), 'PROJECTS', 'otzaria-library');
   String otzariaRepo = p.join(_home(), 'PROJECTS', 'otzaria');
   String outDir = p.join(_home(), 'Documents');
-  String outName = 'בדיקת המרות';
   String displayName = 'בדיקת המרות';
   String author = '';
-  String libraryId = '';
   String defaultCategory = 'ספרים לבדיקה';
   String defaultSource = 'בדיקה';
   bool useLibraryLinks = false;
@@ -25,20 +23,20 @@ class Settings {
   ThemeMode themeMode = ThemeMode.system;
   List<InputSpec> inputs = [];
 
-  String get outPath {
-    final name = outName.trim();
-    if (outDir.isEmpty || name.isEmpty) return '';
-    return p.join(outDir, name.toLowerCase().endsWith('.db') ? name : '$name.db');
+  /// שם הקובץ נגזר משם המסד (תווים שאסורים בשם קובץ מוחלפים).
+  String get fileName {
+    final name = displayName.trim().replaceAll(RegExp(r'[<>:"/\|?*]'), '-').replaceAll(RegExp(r'[. ]+$'), '');
+    return name.isEmpty ? '' : '$name.db';
   }
+
+  String get outPath => outDir.isEmpty || fileName.isEmpty ? '' : p.join(outDir, fileName);
 
   Map<String, Object?> toJson() => {
     'libraryPath': libraryPath,
     'otzariaRepo': otzariaRepo,
     'outDir': outDir,
-    'outName': outName,
     'displayName': displayName,
     'author': author,
-    'libraryId': libraryId,
     'defaultCategory': defaultCategory,
     'defaultSource': defaultSource,
     'useLibraryLinks': useLibraryLinks,
@@ -55,10 +53,8 @@ class Settings {
     s.libraryPath = str('libraryPath', s.libraryPath);
     s.otzariaRepo = str('otzariaRepo', s.otzariaRepo);
     s.outDir = str('outDir', s.outDir);
-    s.outName = str('outName', s.outName);
     s.displayName = str('displayName', s.displayName);
     s.author = j['author'] is String ? j['author'] as String : '';
-    s.libraryId = str('libraryId', '');
     s.defaultCategory = str('defaultCategory', s.defaultCategory);
     s.defaultSource = str('defaultSource', s.defaultSource);
     s.useLibraryLinks = b('useLibraryLinks', false);

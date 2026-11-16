@@ -36,23 +36,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<String?> _dir(String title) => FilePicker.getDirectoryPath(dialogTitle: title);
 
-  Future<void> _confirmNewId(BuildContext context) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('מזהה ספרייה חדש'),
-        content: const Text(
-          'המסד הבא ייחשב באוצריא למסד חדש ונפרד, ולא לגרסה חדשה של הקודם. להמשיך?',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('ביטול')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('צור מזהה חדש')),
-        ],
-      ),
-    );
-    if (ok == true) c.regenerateLibraryId();
-  }
-
   Widget _pathRow(String label, String value, VoidCallback? onPick, {String? status, bool bad = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,21 +189,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   childrenPadding: const EdgeInsets.all(AppTokens.spaceMD),
                   expandedCrossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('מזהה המסד (library_id)'),
+                    const Text('מזהה המסד (library_id) של הקלט הנוכחי'),
                     const SizedBox(height: AppTokens.spaceXS),
                     Row(
                       children: [
-                        Expanded(child: SelectableText(s.libraryId, style: const TextStyle(fontFamily: 'Consolas'))),
-                        CopyButton(s.libraryId, onCopied: () => c.showMessage('המזהה הועתק.')),
+                        Expanded(child: SelectableText(c.libraryId, style: const TextStyle(fontFamily: 'Consolas'))),
+                        CopyButton(c.libraryId, onCopied: () => c.showMessage('המזהה הועתק.')),
                       ],
                     ),
-                    const Hint('לפיו אוצריא מזהה שמסד חדש הוא גרסה של אותו מסד. אין צורך לשנות אותו.'),
+                    const Hint('נגזר מקבוצת הקבצים שהוספת: אותם קבצים ← אותו מזהה (אוצריא מזהה עדכון גרסה), קבצים אחרים ← מזהה אחר (מסד נפרד).'),
                     const SizedBox(height: AppTokens.spaceSM),
-                    OutlinedButton.icon(
-                      onPressed: c.busy ? null : () => _confirmNewId(context),
-                      icon: const Icon(FluentIcons.add_24_regular),
-                      label: const Text('צור מזהה חדש'),
-                    ),
                     const SizedBox(height: AppTokens.spaceMD),
                     TextField(
                       controller: _author,

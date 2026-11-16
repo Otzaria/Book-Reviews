@@ -28,7 +28,6 @@ class BuildScreen extends StatefulWidget {
 
 class _BuildScreenState extends State<BuildScreen> {
   late final _name = TextEditingController(text: widget.controller.settings.displayName);
-  late final _outName = TextEditingController(text: widget.controller.settings.outName);
   final _scroll = ScrollController();
   late BuildResult? _seenResult = widget.controller.lastResult;
   var _dragging = false;
@@ -36,7 +35,6 @@ class _BuildScreenState extends State<BuildScreen> {
   @override
   void dispose() {
     _name.dispose();
-    _outName.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -195,7 +193,7 @@ class _BuildScreenState extends State<BuildScreen> {
       icon: FluentIcons.database_24_regular,
       info:
           'הקובץ שייווצר. באוצריא: הגדרות ← ספרייה ← מסדי ספרים אישיים ← ייבא קובץ מסד. '
-          'בנייה חוזרת לאותו קובץ מעלה את הגרסה, כך שאוצריא מחליפה את הקודם.',
+          'בנייה חוזרת על אותם ספרים מחליפה את הקובץ (אותו שם ומזהה, גרסה גבוהה יותר): שחררו אותו באוצריא לפני כן ואז סרקו. ספרים אחרים נשמרים בשם חדש עם מספר.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -215,25 +213,22 @@ class _BuildScreenState extends State<BuildScreen> {
             children: [
               Expanded(
                 child: TextField(
-                  controller: _outName,
-                  enabled: !c.busy,
-                  decoration: const InputDecoration(labelText: 'שם הקובץ', suffixText: '.db', border: OutlineInputBorder()),
-                  onChanged: c.setOutName,
-                ),
-              ),
-              const SizedBox(width: AppTokens.spaceSM),
-              Expanded(
-                child: TextField(
                   controller: _name,
                   enabled: !c.busy,
-                  decoration: const InputDecoration(labelText: 'שם התצוגה באוצריא', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'שם המסד (גם שם הקובץ וגם השם באוצריא)',
+                    suffixText: '.db',
+                    border: OutlineInputBorder(),
+                  ),
                   onChanged: c.setDisplayName,
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppTokens.spaceSM),
-          Hint(exists ? 'הקובץ קיים: הוא יוחלף בגרסה הבאה.' : 'קובץ חדש ייווצר.'),
+          Hint(exists
+              ? 'אותם ספרים ← אותו קובץ ואותו שם, גרסה חדשה (החלפה: שחררו את הקובץ באוצריא לפני הבנייה). ספרים אחרים ← שם חדש עם מספר, למשל "(1)".'
+              : 'קובץ חדש ייווצר.'),
         ],
       ),
     );

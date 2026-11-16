@@ -19,8 +19,7 @@ AppController _controller() {
       const InputSpec(r'C:\ספרים\MoreBooks\ספרים\אוצריא\קבלה\הערות על ספר בדיקה.txt'),
       const InputSpec(r'C:\ספרים\ספר בדיקה_links.json'),
     ]
-    ..outDir = r'C:\ספרים'
-    ..libraryId = 'chk-test';
+    ..outDir = r'C:\ספרים';
   c.items = [
     for (final s in c.settings.inputs)
       InputItem(s, roleOf(s.path), roleOf(s.path) == InputRole.links ? null : Placement('MoreBooks', ['קבלה'], PlacementKind.libraryPath)),

@@ -40,6 +40,47 @@ void main() {
     } catch (_) {}
   });
 
+  group('מזהה ושם קובץ בבנייה חוזרת', () {
+    test('אותם קבצים ← אותו מזהה; קבצים אחרים ← מזהה אחר', () {
+      expect(libraryIdForInputs([r'C:\a\x.txt', r'C:\a\y.txt']), libraryIdForInputs([r'c:/a/y.txt', r'C:\a\x.txt']));
+      expect(libraryIdForInputs([r'C:\a\x.txt']), isNot(libraryIdForInputs([r'C:\a\z.txt'])));
+    });
+
+    test('אותם ספרים ← אותו קובץ, אותו שם וגרסה עולה; ספרים אחרים ← שם חדש עם מספר', () {
+      final book = write('src/ספר.txt', 'כותרת\nשורה');
+      final other = write('src2/אחר.txt', 'כותרת\nשורה');
+      BuildResult run(String input) => buildDatabase(
+        BuildOptions(
+          inputs: [InputSpec(input)],
+          libraryPath: '',
+          outPath: p.join(tmp.path, 'out', 'בדיקה.db'),
+          libraryId: libraryIdForInputs([input]),
+          displayName: 'בדיקה',
+        ),
+      );
+      final first = run(book);
+      final again = run(book);
+      expect(again.outPath, first.outPath);
+      expect(p.basename(first.outPath), 'בדיקה.db');
+      final meta = readSchemaMeta(first.outPath)!;
+      expect(meta['db_version'], '2');
+      expect(meta['display_name'], 'בדיקה');
+
+      final second = run(other);
+      expect(p.basename(second.outPath), 'בדיקה (1).db');
+      final meta2 = readSchemaMeta(second.outPath)!;
+      expect(meta2['display_name'], 'בדיקה (1)');
+      expect(meta2['db_version'], '1');
+      expect(meta2['library_id'], isNot(meta['library_id']));
+
+      // חזרה על הספרים הראשונים לא נוגעת בשני.
+      final third = run(book);
+      expect(third.outPath, first.outPath);
+      expect(readSchemaMeta(third.outPath)!['db_version'], '3');
+      expect(readSchemaMeta(second.outPath)!['db_version'], '1');
+    });
+  });
+
   group('שמות (CategoryKeys.kt)', () {
     test('גרשיים, גרש ורווחים', () {
       expect(bookTitleOf('שו"ת הרשב"א'), 'שו״ת הרשב״א');
